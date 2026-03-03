@@ -1,0 +1,809 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>BCIT Program Finder</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --bg: #0a0f1e;
+    --surface: #111827;
+    --surface2: #1a2438;
+    --border: #1e2d47;
+    --blue: #3b82f6;
+    --cyan: #06b6d4;
+    --gold: #f59e0b;
+    --green: #10b981;
+    --purple: #8b5cf6;
+    --rose: #f43f5e;
+    --text: #f1f5f9;
+    --muted: #64748b;
+    --radius: 12px;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'DM Sans', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem 1rem;
+    overflow-x: hidden;
+  }
+
+  /* Animated background grid */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(59,130,246,0.04) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(59,130,246,0.04) 1px, transparent 1px);
+    background-size: 48px 48px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  body::after {
+    content: '';
+    position: fixed;
+    top: -30%;
+    left: -20%;
+    width: 70%;
+    height: 70%;
+    background: radial-gradient(ellipse, rgba(59,130,246,0.08) 0%, transparent 70%);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  #app {
+    position: relative;
+    z-index: 1;
+    width: 100%;
+    max-width: 620px;
+  }
+
+  /* ── BCIT Badge ── */
+  .bcit-badge {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 99px;
+    padding: 6px 16px 6px 10px;
+    width: fit-content;
+    margin: 0 auto 2rem;
+    font-family: 'DM Mono', monospace;
+    font-size: 0.72rem;
+    letter-spacing: 0.08em;
+    color: var(--muted);
+    text-transform: uppercase;
+  }
+
+  .bcit-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--blue);
+    box-shadow: 0 0 8px var(--blue);
+    animation: pulse 2s ease-in-out infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.5; transform: scale(0.8); }
+  }
+
+  /* ── SCREENS ── */
+  .screen {
+    display: none;
+    animation: fadeUp 0.45s ease both;
+  }
+  .screen.active { display: block; }
+
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(24px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  @keyframes slideIn {
+    from { opacity: 0; transform: translateX(40px) scale(0.97); }
+    to   { opacity: 1; transform: translateX(0) scale(1); }
+  }
+
+  @keyframes slideOut {
+    from { opacity: 1; transform: translateX(0) scale(1); }
+    to   { opacity: 0; transform: translateX(-40px) scale(0.97); }
+  }
+
+  /* ── START SCREEN ── */
+  #start-screen {
+    text-align: center;
+  }
+
+  .hero-icon {
+    font-size: 5rem;
+    display: block;
+    margin-bottom: 1.5rem;
+    animation: float 3s ease-in-out infinite;
+  }
+
+  @keyframes float {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-10px); }
+  }
+
+  h1 {
+    font-family: 'Syne', sans-serif;
+    font-weight: 800;
+    font-size: clamp(2.4rem, 7vw, 3.5rem);
+    line-height: 1.1;
+    margin-bottom: 1rem;
+  }
+
+  h1 span {
+    color: var(--blue);
+    text-shadow: 0 0 32px rgba(59,130,246,0.5);
+  }
+
+  .subtitle {
+    color: var(--muted);
+    font-size: 1.05rem;
+    line-height: 1.6;
+    max-width: 380px;
+    margin: 0 auto 2.5rem;
+  }
+
+  /* ── BUTTON ── */
+  .btn-primary {
+    display: inline-block;
+    background: var(--blue);
+    color: #fff;
+    font-family: 'Syne', sans-serif;
+    font-weight: 700;
+    font-size: 1rem;
+    padding: 14px 36px;
+    border-radius: var(--radius);
+    border: none;
+    cursor: pointer;
+    transition: all 0.2s;
+    box-shadow: 0 0 24px rgba(59,130,246,0.35);
+  }
+
+  .btn-primary:hover {
+    background: #60a5fa;
+    transform: translateY(-2px);
+    box-shadow: 0 0 36px rgba(59,130,246,0.55);
+  }
+
+  .btn-primary:active { transform: translateY(0); }
+
+  .hint {
+    margin-top: 1.2rem;
+    font-family: 'DM Mono', monospace;
+    font-size: 0.72rem;
+    color: var(--muted);
+    letter-spacing: 0.04em;
+  }
+
+  /* ── PROGRESS ── */
+  .progress-wrap {
+    margin-bottom: 2rem;
+  }
+
+  .progress-meta {
+    display: flex;
+    justify-content: space-between;
+    font-family: 'DM Mono', monospace;
+    font-size: 0.75rem;
+    color: var(--muted);
+    margin-bottom: 8px;
+  }
+
+  .progress-pct { color: var(--blue); }
+
+  .progress-bar {
+    height: 4px;
+    background: var(--surface2);
+    border-radius: 99px;
+    overflow: hidden;
+  }
+
+  .progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--blue), var(--cyan));
+    border-radius: 99px;
+    transition: width 0.5s cubic-bezier(0.4,0,0.2,1);
+    box-shadow: 0 0 8px rgba(59,130,246,0.6);
+  }
+
+  /* ── QUESTION CARD ── */
+  .question-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 2rem;
+    animation: slideIn 0.4s ease both;
+  }
+
+  .q-emoji {
+    font-size: 2.8rem;
+    display: block;
+    text-align: center;
+    margin-bottom: 1rem;
+  }
+
+  .q-text {
+    font-family: 'Syne', sans-serif;
+    font-weight: 700;
+    font-size: clamp(1.2rem, 4vw, 1.55rem);
+    text-align: center;
+    line-height: 1.3;
+    margin-bottom: 1.6rem;
+  }
+
+  .options-grid {
+    display: grid;
+    gap: 10px;
+  }
+
+  .option-btn {
+    width: 100%;
+    text-align: left;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 14px 18px;
+    cursor: pointer;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 0.95rem;
+    color: var(--muted);
+    transition: all 0.18s;
+    line-height: 1.4;
+  }
+
+  .option-btn:hover {
+    border-color: var(--blue);
+    color: var(--text);
+    background: rgba(59,130,246,0.08);
+    box-shadow: 0 0 0 1px rgba(59,130,246,0.3), 0 0 16px rgba(59,130,246,0.12);
+    transform: translateX(4px);
+  }
+
+  /* ── RESULTS SCREEN ── */
+  #results-screen {
+    text-align: center;
+  }
+
+  .top-match-icon {
+    font-size: 4.5rem;
+    display: block;
+    margin-bottom: 1rem;
+    animation: float 3s ease-in-out infinite;
+  }
+
+  .results-eyebrow {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.72rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 0.5rem;
+  }
+
+  .results-title {
+    font-family: 'Syne', sans-serif;
+    font-weight: 800;
+    font-size: clamp(1.6rem, 5vw, 2.4rem);
+    line-height: 1.2;
+    margin-bottom: 0.75rem;
+  }
+
+  .results-desc {
+    color: var(--muted);
+    font-size: 1rem;
+    line-height: 1.65;
+    max-width: 420px;
+    margin: 0 auto 2rem;
+  }
+
+  /* category pill */
+  .category-pill {
+    display: inline-block;
+    padding: 4px 12px;
+    border-radius: 99px;
+    font-family: 'DM Mono', monospace;
+    font-size: 0.68rem;
+    letter-spacing: 0.06em;
+    margin-bottom: 1rem;
+    border: 1px solid;
+  }
+
+  /* ── Ranking bars ── */
+  .ranking-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-bottom: 2rem;
+    text-align: left;
+  }
+
+  .rank-item {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 14px 16px;
+    opacity: 0;
+    transform: translateX(-20px);
+    transition: opacity 0.4s ease, transform 0.4s ease;
+  }
+
+  .rank-item.visible { opacity: 1; transform: translateX(0); }
+  .rank-item.top-item { border-color: var(--blue); box-shadow: 0 0 0 1px rgba(59,130,246,0.3); }
+
+  .rank-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 8px;
+  }
+
+  .rank-emoji { font-size: 1.4rem; }
+
+  .rank-name {
+    flex: 1;
+    font-family: 'Syne', sans-serif;
+    font-weight: 600;
+    font-size: 0.95rem;
+    color: var(--text);
+  }
+
+  .rank-pct {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.75rem;
+    color: var(--muted);
+  }
+
+  .rank-bar-bg {
+    height: 4px;
+    background: var(--surface2);
+    border-radius: 99px;
+    overflow: hidden;
+  }
+
+  .rank-bar-fill {
+    height: 100%;
+    border-radius: 99px;
+    width: 0;
+    transition: width 0.7s cubic-bezier(0.4,0,0.2,1);
+  }
+
+  /* ── Careers ── */
+  .careers-section { margin-bottom: 2rem; }
+
+  .careers-label {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.68rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 10px;
+  }
+
+  .careers-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    justify-content: center;
+  }
+
+  .career-tag {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 99px;
+    padding: 6px 14px;
+    font-size: 0.82rem;
+    color: var(--text);
+  }
+
+  /* type colors */
+  .color-blue  { color: var(--blue);   border-color: rgba(59,130,246,0.4);  background: rgba(59,130,246,0.08); }
+  .color-cyan  { color: var(--cyan);   border-color: rgba(6,182,212,0.4);   background: rgba(6,182,212,0.08); }
+  .color-gold  { color: var(--gold);   border-color: rgba(245,158,11,0.4);  background: rgba(245,158,11,0.08); }
+  .color-green { color: var(--green);  border-color: rgba(16,185,129,0.4);  background: rgba(16,185,129,0.08); }
+  .color-purple{ color: var(--purple); border-color: rgba(139,92,246,0.4);  background: rgba(139,92,246,0.08); }
+  .color-rose  { color: var(--rose);   border-color: rgba(244,63,94,0.4);   background: rgba(244,63,94,0.08); }
+
+  .bar-blue   { background: linear-gradient(90deg, var(--blue), var(--cyan));   box-shadow: 0 0 6px rgba(59,130,246,0.5); }
+  .bar-cyan   { background: linear-gradient(90deg, var(--cyan), var(--green));  box-shadow: 0 0 6px rgba(6,182,212,0.5); }
+  .bar-gold   { background: linear-gradient(90deg, var(--gold), #fbbf24);       box-shadow: 0 0 6px rgba(245,158,11,0.5); }
+  .bar-green  { background: linear-gradient(90deg, var(--green), var(--cyan));  box-shadow: 0 0 6px rgba(16,185,129,0.5); }
+  .bar-purple { background: linear-gradient(90deg, var(--purple), var(--rose)); box-shadow: 0 0 6px rgba(139,92,246,0.5); }
+  .bar-rose   { background: linear-gradient(90deg, var(--rose), var(--purple)); box-shadow: 0 0 6px rgba(244,63,94,0.5); }
+
+  .title-blue   { color: var(--blue);   text-shadow: 0 0 28px rgba(59,130,246,0.5); }
+  .title-cyan   { color: var(--cyan);   text-shadow: 0 0 28px rgba(6,182,212,0.5); }
+  .title-gold   { color: var(--gold);   text-shadow: 0 0 28px rgba(245,158,11,0.5); }
+  .title-green  { color: var(--green);  text-shadow: 0 0 28px rgba(16,185,129,0.5); }
+  .title-purple { color: var(--purple); text-shadow: 0 0 28px rgba(139,92,246,0.5); }
+  .title-rose   { color: var(--rose);   text-shadow: 0 0 28px rgba(244,63,94,0.5); }
+
+  @media (max-width: 480px) {
+    .question-card { padding: 1.4rem; }
+  }
+</style>
+</head>
+<body>
+
+<div id="app">
+  <div class="bcit-badge">
+    <span class="bcit-dot"></span>
+    BCIT · Program Finder
+  </div>
+
+  <!-- START -->
+  <div id="start-screen" class="screen active">
+    <span class="hero-icon">🎓</span>
+    <h1>Find Your<br><span>BCIT Program</span></h1>
+    <p class="subtitle">Answer 9 quick questions and discover which BCIT program in Creative Industries or Design is your best match.</p>
+    <button class="btn-primary" onclick="startQuiz()">Start Quiz →</button>
+    <p class="hint">Takes about 2 minutes &nbsp;·&nbsp; No sign-up required</p>
+  </div>
+
+  <!-- QUIZ -->
+  <div id="quiz-screen" class="screen">
+    <div class="progress-wrap">
+      <div class="progress-meta">
+        <span id="q-label">Question 1 of 9</span>
+        <span class="progress-pct" id="q-pct">0%</span>
+      </div>
+      <div class="progress-bar">
+        <div class="progress-fill" id="progress-fill" style="width:0%"></div>
+      </div>
+    </div>
+    <div id="question-card-wrap"></div>
+  </div>
+
+  <!-- RESULTS -->
+  <div id="results-screen" class="screen">
+    <div id="results-content"></div>
+  </div>
+</div>
+
+<script>
+// ─── DATA ────────────────────────────────────────────────────────────────────
+
+const programs = [
+  {
+    id: "creative_industries",
+    name: "Bachelor of Creative Industries",
+    emoji: "🌐",
+    category: "Bachelor's Degree",
+    description: "An interdisciplinary degree blending technology, business, and creative practice — preparing you to lead in the modern creative economy.",
+    careers: ["Creative Producer", "Brand Strategist", "Experience Designer", "Startup Founder"],
+    color: "purple",
+  },
+  {
+    id: "technical_arts",
+    name: "Technical Arts",
+    emoji: "🎬",
+    category: "Advanced Diploma",
+    description: "Bridge art and technology with advanced VFX, pipeline TD work, and production skills for film and game studios.",
+    careers: ["VFX Artist", "Pipeline TD", "Compositing Supervisor", "Technical Director"],
+    color: "rose",
+  },
+  {
+    id: "modeling_3d",
+    name: "3D Modeling, Art & Animation",
+    emoji: "🧊",
+    category: "Diploma",
+    description: "Master the craft of building worlds — from character sculpts to cinematic environments for games, film, and XR.",
+    careers: ["3D Animator", "Character Artist", "Environment Artist", "Motion Designer"],
+    color: "cyan",
+  },
+  {
+    id: "digital_design",
+    name: "Digital Design & Development",
+    emoji: "⚡",
+    category: "Diploma",
+    description: "Combine interactive design with frontend development — bringing digital products to life across web and mobile platforms.",
+    careers: ["UI Developer", "Interactive Designer", "Web Developer", "Front-End Engineer"],
+    color: "blue",
+  },
+  {
+    id: "graphic_comm",
+    name: "Graphic Communications",
+    emoji: "🖨️",
+    category: "Diploma",
+    description: "The full lifecycle of print and digital publishing — from prepress and production to colour management and distribution.",
+    careers: ["Production Artist", "Print Specialist", "Prepress Technician", "Colour Manager"],
+    color: "gold",
+  },
+  {
+    id: "new_media",
+    name: "New Media Design & Web Dev",
+    emoji: "🕸️",
+    category: "Diploma",
+    description: "Design and build digital experiences — spanning web design, multimedia, and interactive content for modern audiences.",
+    careers: ["Web Designer", "Multimedia Developer", "Content Creator", "Digital Media Producer"],
+    color: "green",
+  },
+  {
+    id: "graphic_design",
+    name: "Graphic Design",
+    emoji: "✏️",
+    category: "Diploma / Certificate",
+    description: "Develop a sharp visual design practice — typography, identity, layout, and concept-driven communication across all media.",
+    careers: ["Graphic Designer", "Art Director", "Brand Designer", "Packaging Designer"],
+    color: "rose",
+  },
+  {
+    id: "uiux",
+    name: "UI & UX Design",
+    emoji: "🖱️",
+    category: "Certificate",
+    description: "Research, prototype, and refine digital interfaces that people actually love to use — from wireframes to polished prototypes.",
+    careers: ["UX Designer", "Product Designer", "UX Researcher", "Interaction Designer"],
+    color: "blue",
+  },
+  {
+    id: "photography",
+    name: "Digital Photography",
+    emoji: "📸",
+    category: "Certificate",
+    description: "Master light, composition, and post-production — from commercial shoots to editorial storytelling.",
+    careers: ["Photographer", "Photo Editor", "Visual Content Creator", "Studio Photographer"],
+    color: "gold",
+  },
+  {
+    id: "media_marketing",
+    name: "Media Techniques & Marketing",
+    emoji: "📣",
+    category: "Certificate",
+    description: "Blend creative media production with marketing strategy — content creation, social campaigns, and brand communications.",
+    careers: ["Content Strategist", "Social Media Manager", "Marketing Coordinator", "Copywriter"],
+    color: "green",
+  },
+];
+
+const questions = [
+  {
+    id: 1, emoji: "🧠",
+    question: "When you solve a problem, what does that usually look like?",
+    options: [
+      { text: "I sketch, map, or visualize it until it clicks", scores: { graphic_design: 2, uiux: 2, modeling_3d: 1 } },
+      { text: "I break it into steps and build my way through", scores: { digital_design: 3, technical_arts: 2, graphic_comm: 1 } },
+      { text: "I research the people affected and design around them", scores: { uiux: 3, creative_industries: 2, media_marketing: 1 } },
+      { text: "I pitch ideas and rally others around the best one", scores: { creative_industries: 3, media_marketing: 2 } },
+    ],
+  },
+  {
+    id: 2, emoji: "🌀",
+    question: "Which feeling do you most want your work to create in others?",
+    options: [
+      { text: "Awe — they can't believe someone made that", scores: { modeling_3d: 3, technical_arts: 3, photography: 1 } },
+      { text: "Clarity — everything just makes sense now", scores: { uiux: 3, graphic_design: 2, graphic_comm: 1 } },
+      { text: "Desire — they have to have it or be part of it", scores: { media_marketing: 3, creative_industries: 2 } },
+      { text: "Recognition — they see themselves in it", scores: { photography: 3, graphic_design: 2, new_media: 1 } },
+    ],
+  },
+  {
+    id: 3, emoji: "⚙️",
+    question: "What's your relationship with tools and systems?",
+    options: [
+      { text: "I love mastering complex technical tools deeply", scores: { technical_arts: 3, digital_design: 2, modeling_3d: 2 } },
+      { text: "I use tools fluidly — whatever the work needs", scores: { new_media: 3, creative_industries: 2 } },
+      { text: "I care more about the output than the pipeline", scores: { graphic_design: 2, photography: 3, media_marketing: 1 } },
+      { text: "I want to understand every part of the process", scores: { graphic_comm: 3, digital_design: 2, uiux: 1 } },
+    ],
+  },
+  {
+    id: 4, emoji: "🏙️",
+    question: "You're walking through a city. What catches your eye first?",
+    options: [
+      { text: "The typography on storefronts and signage", scores: { graphic_design: 3, graphic_comm: 2 } },
+      { text: "How people move through and interact with spaces", scores: { uiux: 3, creative_industries: 2 } },
+      { text: "The light, shadows, and fleeting moments", scores: { photography: 3, modeling_3d: 1 } },
+      { text: "Billboards, campaigns, and how brands show up", scores: { media_marketing: 3, graphic_design: 1 } },
+    ],
+  },
+  {
+    id: 5, emoji: "🔋",
+    question: "What kind of challenge energizes you most?",
+    options: [
+      { text: "A deeply technical puzzle with no obvious solution", scores: { technical_arts: 3, digital_design: 2, graphic_comm: 1 } },
+      { text: "Making something beautiful from a blank canvas", scores: { graphic_design: 3, photography: 2, modeling_3d: 2 } },
+      { text: "Figuring out why people do what they do", scores: { uiux: 3, media_marketing: 2, creative_industries: 1 } },
+      { text: "Coordinating many moving parts into one vision", scores: { creative_industries: 3, new_media: 2 } },
+    ],
+  },
+  {
+    id: 6, emoji: "🪞",
+    question: "How do you prefer to receive feedback on your work?",
+    options: [
+      { text: "Show me the data — engagement, usability, results", scores: { uiux: 3, media_marketing: 2, digital_design: 1 } },
+      { text: "Tell me how it made you feel", scores: { photography: 3, graphic_design: 2, modeling_3d: 1 } },
+      { text: "Point out what broke or didn't work technically", scores: { technical_arts: 3, graphic_comm: 2 } },
+      { text: "Challenge my concept and push it further", scores: { creative_industries: 3, new_media: 2 } },
+    ],
+  },
+  {
+    id: 7, emoji: "🗓️",
+    question: "How do you want to structure your education?",
+    options: [
+      { text: "A full degree — I want the broadest foundation", scores: { creative_industries: 4 } },
+      { text: "A focused diploma — skilled and job-ready in 2 years", scores: { graphic_design: 2, modeling_3d: 2, digital_design: 2, new_media: 2, graphic_comm: 2 } },
+      { text: "Flexible — I learn best on my own schedule", scores: { uiux: 2, media_marketing: 2, photography: 2 } },
+      { text: "Intensive — I have experience and want advanced training", scores: { technical_arts: 3 } },
+    ],
+  },
+  {
+    id: 8, emoji: "📦",
+    question: "Which part of a project do you least want to hand off to someone else?",
+    options: [
+      { text: "The look and feel — the visual decisions are mine", scores: { graphic_design: 3, photography: 2, modeling_3d: 1 } },
+      { text: "The wiring — how it actually functions under the hood", scores: { digital_design: 3, technical_arts: 2, graphic_comm: 2 } },
+      { text: "The story — the message and who it's for", scores: { media_marketing: 3, creative_industries: 2 } },
+      { text: "The experience — how it feels to move through it", scores: { uiux: 3, new_media: 2 } },
+    ],
+  },
+  {
+    id: 9, emoji: "🌱",
+    question: "In five years, where do you see yourself thriving?",
+    options: [
+      { text: "Deep in a craft, known for technical mastery", scores: { technical_arts: 3, modeling_3d: 2, photography: 2 } },
+      { text: "Running projects, shaping culture and strategy", scores: { creative_industries: 3, media_marketing: 2 } },
+      { text: "Shipping products that reach millions of people", scores: { uiux: 3, digital_design: 3 } },
+      { text: "Making work that ends up in the world — printed, published, seen", scores: { graphic_design: 2, graphic_comm: 3, new_media: 1 } },
+    ],
+  },
+];
+
+// ─── STATE ───────────────────────────────────────────────────────────────────
+
+let currentQ = 0;
+let scores = {};
+
+// ─── HELPERS ─────────────────────────────────────────────────────────────────
+
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+}
+
+function setProgress(current, total) {
+  const pct = Math.round((current / total) * 100);
+  document.getElementById('q-label').textContent = `Question ${current} of ${total}`;
+  document.getElementById('q-pct').textContent = `${pct}%`;
+  document.getElementById('progress-fill').style.width = `${pct}%`;
+}
+
+// ─── QUIZ LOGIC ───────────────────────────────────────────────────────────────
+
+function startQuiz() {
+  currentQ = 0;
+  scores = {};
+  showScreen('quiz-screen');
+  renderQuestion();
+}
+
+function renderQuestion() {
+  const q = questions[currentQ];
+  setProgress(currentQ + 1, questions.length);
+
+  const wrap = document.getElementById('question-card-wrap');
+  // Animate out old card if exists
+  const old = wrap.querySelector('.question-card');
+  if (old) {
+    old.style.animation = 'slideOut 0.3s ease forwards';
+    setTimeout(() => { wrap.innerHTML = buildCard(q); }, 300);
+  } else {
+    wrap.innerHTML = buildCard(q);
+  }
+}
+
+function buildCard(q) {
+  const opts = q.options.map((o, i) =>
+    `<button class="option-btn" onclick="answerQuestion(${i})">${o.text}</button>`
+  ).join('');
+  return `
+    <div class="question-card">
+      <span class="q-emoji">${q.emoji}</span>
+      <h2 class="q-text">${q.question}</h2>
+      <div class="options-grid">${opts}</div>
+    </div>`;
+}
+
+function answerQuestion(optIdx) {
+  const q = questions[currentQ];
+  const opt = q.options[optIdx];
+  Object.entries(opt.scores).forEach(([key, val]) => {
+    scores[key] = (scores[key] || 0) + val;
+  });
+
+  if (currentQ + 1 < questions.length) {
+    currentQ++;
+    renderQuestion();
+  } else {
+    showResults();
+  }
+}
+
+// ─── RESULTS ─────────────────────────────────────────────────────────────────
+
+function getMaxPossible(programId) {
+  return questions.reduce((acc, q) => {
+    const best = Math.max(...q.options.map(o => o.scores[programId] || 0));
+    return acc + best;
+  }, 0);
+}
+
+function showResults() {
+  const ranked = programs
+    .map(p => ({ program: p, score: scores[p.id] || 0, max: getMaxPossible(p.id) }))
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 5);
+
+  const top = ranked[0];
+
+  const bars = ranked.map((item, i) => {
+    const pct = item.max > 0 ? Math.round((item.score / item.max) * 100) : 0;
+    return `
+      <div class="rank-item ${i === 0 ? 'top-item' : ''}" id="rank-${i}">
+        <div class="rank-header">
+          <span class="rank-emoji">${item.program.emoji}</span>
+          <span class="rank-name">${item.program.name}</span>
+          <span class="rank-pct">${pct}%</span>
+        </div>
+        <div class="rank-bar-bg">
+          <div class="rank-bar-fill bar-${item.program.color}" id="bar-fill-${i}" style="width:0%"></div>
+        </div>
+      </div>`;
+  }).join('');
+
+  const careers = top.program.careers.map(c =>
+    `<span class="career-tag">${c}</span>`
+  ).join('');
+
+  document.getElementById('results-content').innerHTML = `
+    <span class="top-match-icon">${top.program.emoji}</span>
+    <p class="results-eyebrow">Your top match is</p>
+    <span class="category-pill color-${top.program.color}">${top.program.category}</span>
+    <h2 class="results-title title-${top.program.color}">${top.program.name}</h2>
+    <p class="results-desc">${top.program.description}</p>
+
+    <div class="ranking-list">${bars}</div>
+
+    <div class="careers-section">
+      <p class="careers-label">Possible Careers</p>
+      <div class="careers-tags">${careers}</div>
+    </div>
+
+    <button class="btn-primary" onclick="startQuiz()">Try Again →</button>
+    <p class="hint" style="margin-top:1rem">Results are for guidance only • Visit bcit.ca for full details</p>
+  `;
+
+  showScreen('results-screen');
+
+  // Stagger rank items in + animate bars
+  ranked.forEach((item, i) => {
+    const pct = item.max > 0 ? Math.round((item.score / item.max) * 100) : 0;
+    setTimeout(() => {
+      const el = document.getElementById(`rank-${i}`);
+      if (el) el.classList.add('visible');
+      setTimeout(() => {
+        const fill = document.getElementById(`bar-fill-${i}`);
+        if (fill) fill.style.width = `${pct}%`;
+      }, 100);
+    }, 200 + i * 120);
+  });
+}
+</script>
+</body>
+</html>
