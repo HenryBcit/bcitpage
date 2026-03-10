@@ -1,0 +1,653 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CHALK — Portal Platformer</title>
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Playfair+Display:ital@0;1&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #07050f;
+    --fg: #f0ece0;
+    --muted: #6a6478;
+    --portal-a: #FF8A00;
+    --portal-b: #00BFFF;
+    --exit: #44FF88;
+    --gravity: #D455F5;
+    --accent: #ff3c6e;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--fg);
+    font-family: 'Share Tech Mono', monospace;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    user-select: none;
+  }
+
+  #wrap {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+  }
+
+  canvas {
+    display: block;
+    border: 1px solid rgba(255,255,255,0.08);
+    cursor: crosshair;
+    max-width: 100vw;
+  }
+
+  #hud {
+    display: flex;
+    justify-content: space-between;
+    width: 800px;
+    max-width: 100vw;
+    padding: 0 2px;
+  }
+
+  .hud-group {
+    display: flex;
+    gap: 20px;
+    font-size: 9px;
+    letter-spacing: 0.12em;
+    color: var(--muted);
+  }
+
+  .hud-group span.pa { color: var(--portal-a); }
+  .hud-group span.pb { color: var(--portal-b); }
+
+  #overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(7,5,15,0.92);
+    transition: opacity 0.4s;
+  }
+
+  #overlay.hidden { display: none; }
+
+  .overlay-content {
+    text-align: center;
+    max-width: 420px;
+    padding: 0 32px;
+  }
+
+  .overlay-eyebrow {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 9px;
+    letter-spacing: 0.25em;
+    color: var(--muted);
+    text-transform: uppercase;
+    margin-bottom: 16px;
+  }
+
+  .overlay-body {
+    font-family: 'Playfair Display', serif;
+    font-style: italic;
+    font-size: 22px;
+    line-height: 1.6;
+    color: var(--fg);
+    margin-bottom: 28px;
+  }
+
+  .overlay-cta {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 9px;
+    letter-spacing: 0.2em;
+    color: var(--muted);
+    animation: blink 1.4s ease-in-out infinite;
+  }
+
+  .overlay-btn {
+    background: none;
+    border: 1px solid var(--muted);
+    color: var(--muted);
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 9px;
+    letter-spacing: 0.15em;
+    padding: 8px 18px;
+    cursor: pointer;
+    transition: color 0.2s, border-color 0.2s;
+    margin-top: 16px;
+  }
+  .overlay-btn:hover { color: var(--fg); border-color: var(--fg); }
+
+  @keyframes blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.25; }
+  }
+</style>
+</head>
+<body>
+<div id="wrap">
+  <canvas id="c" width="800" height="600"></canvas>
+  <div id="hud">
+    <div class="hud-group">
+      <span>WASD — MOVE</span>
+      <span>SPACE — JUMP</span>
+      <span class="pa">L-CLICK — PORTAL A</span>
+      <span class="pb">R-CLICK — PORTAL B</span>
+    </div>
+    <div class="hud-group">
+      <span>R — RESET</span>
+      <span>ESC — PAUSE</span>
+    </div>
+  </div>
+  <div id="overlay">
+    <div class="overlay-content" id="overlay-content">
+      <div class="overlay-eyebrow" id="ov-eyebrow"></div>
+      <div class="overlay-body" id="ov-body"></div>
+      <div class="overlay-cta" id="ov-cta">PRESS SPACE TO BEGIN</div>
+      <button class="overlay-btn" id="ov-btn" style="display:none"></button>
+    </div>
+  </div>
+</div>
+
+<script>
+'use strict';
+
+// ─── Types / Constants ────────────────────────────────────────────────────────
+const CANVAS_W = 800, CANVAS_H = 600;
+const PLAYER_RADIUS = 8;
+const MOVE_SPEED = 250;
+const JUMP_VEL = -350;
+const MAX_TRAIL = 20;
+const FRICTION = 0.85;
+
+// ─── Levels ───────────────────────────────────────────────────────────────────
+const levels = [
+  {
+    id: 'sector-1a', name: 'SECTOR 1A',
+    narrative: 'The station hums. You are the last piece of chalk on a very old blackboard.',
+    defaultGravity: { x: 0, y: 600 },
+    spawn: { x: 80, y: 500 },
+    exit: { x: 720, y: 60, w: 40, h: 50 },
+    walls: [
+      { rect: { x: 0, y: 560, w: 800, h: 40 }, portalable: true },
+      { rect: { x: 0, y: 0, w: 30, h: 560 }, portalable: true },
+      { rect: { x: 770, y: 0, w: 30, h: 560 }, portalable: true },
+      { rect: { x: 0, y: 0, w: 800, h: 30 }, portalable: true },
+      { rect: { x: 200, y: 400, w: 200, h: 20 }, portalable: true },
+      { rect: { x: 500, y: 250, w: 200, h: 20 }, portalable: true },
+      { rect: { x: 650, y: 110, w: 120, h: 20 }, portalable: true },
+    ],
+    gravityZones: [],
+  },
+  {
+    id: 'sector-2b', name: 'SECTOR 2B',
+    narrative: 'Gravity is a suggestion here. The station disagrees with Newton.',
+    defaultGravity: { x: 0, y: 600 },
+    spawn: { x: 80, y: 500 },
+    exit: { x: 720, y: 500, w: 40, h: 50 },
+    walls: [
+      { rect: { x: 0, y: 560, w: 800, h: 40 }, portalable: true },
+      { rect: { x: 0, y: 0, w: 30, h: 560 }, portalable: true },
+      { rect: { x: 770, y: 0, w: 30, h: 560 }, portalable: true },
+      { rect: { x: 0, y: 0, w: 800, h: 30 }, portalable: true },
+      { rect: { x: 350, y: 200, w: 30, h: 360 }, portalable: true },
+      { rect: { x: 100, y: 350, w: 180, h: 20 }, portalable: true },
+      { rect: { x: 450, y: 200, w: 250, h: 20 }, portalable: true },
+      { rect: { x: 450, y: 460, w: 280, h: 20 }, portalable: true },
+    ],
+    gravityZones: [
+      { rect: { x: 380, y: 100, w: 200, h: 200 }, direction: { x: 0, y: -1 }, strength: 700 },
+    ],
+  },
+  {
+    id: 'sector-3c', name: 'SECTOR 3C',
+    narrative: 'The slingshot. Momentum is memory — the universe never forgets how fast you were.',
+    defaultGravity: { x: 0, y: 600 },
+    spawn: { x: 80, y: 500 },
+    exit: { x: 720, y: 40, w: 40, h: 50 },
+    walls: [
+      { rect: { x: 0, y: 560, w: 800, h: 40 }, portalable: true },
+      { rect: { x: 0, y: 0, w: 30, h: 560 }, portalable: true },
+      { rect: { x: 770, y: 0, w: 30, h: 560 }, portalable: true },
+      { rect: { x: 0, y: 0, w: 800, h: 30 }, portalable: true },
+      { rect: { x: 100, y: 400, w: 150, h: 20 }, portalable: true },
+      { rect: { x: 600, y: 90, w: 170, h: 20 }, portalable: true },
+    ],
+    gravityZones: [
+      { rect: { x: 300, y: 0, w: 200, h: 300 }, direction: { x: 0, y: 1 }, strength: 1200 },
+    ],
+  },
+];
+
+// ─── Physics helpers ──────────────────────────────────────────────────────────
+const vecAdd = (a, b) => ({ x: a.x + b.x, y: a.y + b.y });
+const vecScale = (v, s) => ({ x: v.x * s, y: v.y * s });
+const vecLen = v => Math.sqrt(v.x * v.x + v.y * v.y);
+const clamp = (v, mn, mx) => Math.max(mn, Math.min(mx, v));
+
+function rectContains(r, p) {
+  return p.x >= r.x && p.x <= r.x + r.w && p.y >= r.y && p.y <= r.y + r.h;
+}
+function rectsOverlap(a, b) {
+  return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
+}
+function playerRect(p) {
+  return { x: p.pos.x - p.radius, y: p.pos.y - p.radius, w: p.radius * 2, h: p.radius * 2 };
+}
+
+function getGravity(pos, defaultGrav, zones) {
+  for (const z of zones) {
+    if (rectContains(z.rect, pos)) return vecScale(z.direction, z.strength);
+  }
+  return defaultGrav;
+}
+
+function resolveCollisions(player, walls) {
+  let pos = { ...player.pos };
+  let vel = { ...player.vel };
+  let grounded = false;
+  const r = player.radius;
+
+  for (const wall of walls) {
+    const wr = wall.rect;
+    const pr = { x: pos.x - r, y: pos.y - r, w: r * 2, h: r * 2 };
+    if (!rectsOverlap(pr, wr)) continue;
+
+    const oL = (pr.x + pr.w) - wr.x;
+    const oR = (wr.x + wr.w) - pr.x;
+    const oT = (pr.y + pr.h) - wr.y;
+    const oB = (wr.y + wr.h) - pr.y;
+    const min = Math.min(oL, oR, oT, oB);
+
+    if (min === oT)      { pos.y = wr.y - r; if (vel.y > 0) vel.y = 0; grounded = true; }
+    else if (min === oB) { pos.y = wr.y + wr.h + r; if (vel.y < 0) vel.y = 0; }
+    else if (min === oL) { pos.x = wr.x - r; if (vel.x > 0) vel.x = 0; }
+    else                 { pos.x = wr.x + wr.w + r; if (vel.x < 0) vel.x = 0; }
+  }
+  return { resolved: pos, vel, grounded };
+}
+
+function checkPortalTeleport(player, pA, pB) {
+  const none = { teleported: false, newPos: player.pos, newVel: player.vel };
+  if (!pA || !pB) return none;
+  const r = player.radius;
+  for (const [entry, exit] of [[pA, pB], [pB, pA]]) {
+    const dx = player.pos.x - entry.pos.x;
+    const dy = player.pos.y - entry.pos.y;
+    if (Math.sqrt(dx*dx + dy*dy) < r + 15) {
+      const newPos = vecAdd(exit.pos, vecScale(exit.normal, r + 20));
+      const newVel = vecScale(exit.normal, vecLen(player.vel));
+      return { teleported: true, newPos, newVel };
+    }
+  }
+  return none;
+}
+
+function getWallNormal(wall, click) {
+  const r = wall.rect;
+  const cx = r.x + r.w / 2, cy = r.y + r.h / 2;
+  const dx = click.x - cx, dy = click.y - cy;
+  const ax = Math.abs(dx) / r.w, ay = Math.abs(dy) / r.h;
+  let normal, pos;
+  if (ax > ay) {
+    if (dx > 0) { normal = { x: 1, y: 0 }; pos = { x: r.x + r.w, y: clamp(click.y, r.y+5, r.y+r.h-5) }; }
+    else        { normal = { x:-1, y: 0 }; pos = { x: r.x,       y: clamp(click.y, r.y+5, r.y+r.h-5) }; }
+  } else {
+    if (dy > 0) { normal = { x: 0, y: 1 }; pos = { x: clamp(click.x, r.x+5, r.x+r.w-5), y: r.y + r.h }; }
+    else        { normal = { x: 0, y:-1 }; pos = { x: clamp(click.x, r.x+5, r.x+r.w-5), y: r.y       }; }
+  }
+  return { pos, normal };
+}
+
+// ─── Renderer ─────────────────────────────────────────────────────────────────
+function render(ctx, w, h, walls, gravityZones, player, portalA, portalB, exit, time) {
+  // Background
+  ctx.fillStyle = '#07050f';
+  ctx.fillRect(0, 0, w, h);
+
+  // Stars
+  ctx.fillStyle = 'rgba(255,255,255,0.25)';
+  for (let i = 0; i < 70; i++) {
+    const sx = (i * 137 + 51) % w;
+    const sy = (i * 97  + 23) % h;
+    const sz = (i % 3 === 0) ? 1.5 : 1;
+    ctx.fillRect(sx, sy, sz, sz);
+  }
+
+  // Gravity zones
+  for (const zone of gravityZones) {
+    const pulse = 0.15 + 0.1 * Math.sin(time * 2);
+    ctx.fillStyle = `rgba(212,85,245,${pulse})`;
+    ctx.fillRect(zone.rect.x, zone.rect.y, zone.rect.w, zone.rect.h);
+    ctx.strokeStyle = `rgba(212,85,245,${pulse+0.1})`;
+    ctx.lineWidth = 0.5;
+    const sp = 30;
+    for (let gx = zone.rect.x; gx < zone.rect.x + zone.rect.w; gx += sp) {
+      ctx.beginPath(); ctx.moveTo(gx, zone.rect.y); ctx.lineTo(gx, zone.rect.y + zone.rect.h); ctx.stroke();
+    }
+    for (let gy = zone.rect.y; gy < zone.rect.y + zone.rect.h; gy += sp) {
+      ctx.beginPath(); ctx.moveTo(zone.rect.x, gy); ctx.lineTo(zone.rect.x + zone.rect.w, gy); ctx.stroke();
+    }
+    // Arrow
+    const acx = zone.rect.x + zone.rect.w / 2;
+    const acy = zone.rect.y + zone.rect.h / 2;
+    ctx.strokeStyle = 'rgba(212,85,245,0.6)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(acx, acy - 15 * zone.direction.y);
+    ctx.lineTo(acx + 15 * zone.direction.x, acy + 15 * zone.direction.y);
+    ctx.stroke();
+  }
+
+  // Exit
+  const ep = 0.5 + 0.3 * Math.sin(time * 3);
+  ctx.shadowColor = '#44FF88';
+  ctx.shadowBlur = 18;
+  ctx.fillStyle = `rgba(68,255,136,${ep})`;
+  ctx.fillRect(exit.x, exit.y, exit.w, exit.h);
+  ctx.shadowBlur = 0;
+
+  // Walls
+  for (const wall of walls) {
+    ctx.fillStyle = wall.portalable ? '#f0ece0' : '#2D3A4C';
+    ctx.fillRect(wall.rect.x, wall.rect.y, wall.rect.w, wall.rect.h);
+    if (wall.portalable) {
+      ctx.strokeStyle = 'rgba(255,255,255,0.25)';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(wall.rect.x+1, wall.rect.y+1, wall.rect.w-2, wall.rect.h-2);
+    }
+  }
+
+  // Portals
+  if (portalA) drawPortal(ctx, portalA, '#FF8A00', time);
+  if (portalB) drawPortal(ctx, portalB, '#00BFFF', time);
+
+  // Trail
+  for (let i = 0; i < player.trail.length; i++) {
+    const alpha = (i / player.trail.length) * 0.4;
+    const size  = player.radius * (i / player.trail.length) * 0.6;
+    ctx.fillStyle = `rgba(255,255,255,${alpha})`;
+    ctx.beginPath();
+    ctx.ellipse(player.trail[i].x, player.trail[i].y, size, size * 1.4, 0, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // Player
+  ctx.fillStyle = '#ffffff';
+  ctx.shadowColor = '#ffffff';
+  ctx.shadowBlur = 10;
+  ctx.beginPath();
+  ctx.ellipse(player.pos.x, player.pos.y, player.radius, player.radius * 1.4, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.shadowBlur = 0;
+}
+
+function drawPortal(ctx, portal, color, time) {
+  const pulse = 1 + 0.15 * Math.sin(time * 5);
+  ctx.save();
+  ctx.translate(portal.pos.x, portal.pos.y);
+  ctx.shadowColor = color;
+  ctx.shadowBlur = 20 * pulse;
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 4;
+  ctx.beginPath();
+  if (Math.abs(portal.normal.x) > 0) { ctx.moveTo(0,-18); ctx.lineTo(0,18); }
+  else                                { ctx.moveTo(-18,0); ctx.lineTo(18,0); }
+  ctx.stroke();
+  ctx.strokeStyle = 'rgba(255,255,255,0.6)';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  if (Math.abs(portal.normal.x) > 0) { ctx.moveTo(0,-14); ctx.lineTo(0,14); }
+  else                                { ctx.moveTo(-14,0); ctx.lineTo(14,0); }
+  ctx.stroke();
+  ctx.shadowBlur = 0;
+  ctx.restore();
+}
+
+// ─── Game State ───────────────────────────────────────────────────────────────
+let levelIndex = 0;
+let showNarrative = true;
+let paused = false;
+let completed = false;
+let animFrame = null;
+
+const state = {
+  player: null,
+  portalA: null,
+  portalB: null,
+  keys: new Set(),
+  lastTime: 0,
+  teleportCooldown: 0,
+};
+
+function createPlayer(lvl) {
+  return {
+    pos: { ...lvl.spawn },
+    vel: { x: 0, y: 0 },
+    radius: PLAYER_RADIUS,
+    grounded: false,
+    trail: [],
+  };
+}
+
+function resetLevel() {
+  const lvl = levels[levelIndex];
+  state.player = createPlayer(lvl);
+  state.portalA = null;
+  state.portalB = null;
+  state.teleportCooldown = 0;
+  showNarrative = true;
+  completed = false;
+  showOverlay('narrative');
+}
+
+function nextLevel() {
+  if (levelIndex < levels.length - 1) {
+    levelIndex++;
+    resetLevel();
+  } else {
+    completed = true;
+    showOverlay('completed');
+  }
+}
+
+// ─── Overlay management ───────────────────────────────────────────────────────
+const overlay = document.getElementById('overlay');
+const ovEyebrow = document.getElementById('ov-eyebrow');
+const ovBody    = document.getElementById('ov-body');
+const ovCta     = document.getElementById('ov-cta');
+const ovBtn     = document.getElementById('ov-btn');
+
+function showOverlay(mode) {
+  const lvl = levels[levelIndex];
+  ovEyebrow.textContent = lvl.name;
+  ovBtn.style.display = 'none';
+  ovCta.style.display = 'block';
+
+  if (mode === 'narrative') {
+    ovBody.textContent = lvl.narrative || '';
+    ovCta.textContent = 'PRESS SPACE TO BEGIN';
+    overlay.classList.remove('hidden');
+  } else if (mode === 'paused') {
+    ovEyebrow.textContent = 'PAUSED';
+    ovBody.textContent = '';
+    ovCta.style.display = 'none';
+    ovBtn.style.display = 'inline-block';
+    ovBtn.textContent = 'ESC TO RESUME · R TO RESTART';
+    ovBtn.onclick = () => { paused = false; hideOverlay(); };
+    overlay.classList.remove('hidden');
+  } else if (mode === 'completed') {
+    ovEyebrow.textContent = 'TRANSMISSION COMPLETE';
+    ovBody.textContent = 'The station falls silent. You were the last mark on its walls.';
+    ovCta.style.display = 'none';
+    ovBtn.style.display = 'inline-block';
+    ovBtn.textContent = 'RETURN TO SECTOR 1A';
+    ovBtn.onclick = () => { levelIndex = 0; resetLevel(); };
+    overlay.classList.remove('hidden');
+  }
+}
+
+function hideOverlay() {
+  overlay.classList.add('hidden');
+  startLoop();
+}
+
+// ─── Input ────────────────────────────────────────────────────────────────────
+window.addEventListener('keydown', e => {
+  state.keys.add(e.key.toLowerCase());
+  if (e.key === 'r' || e.key === 'R') { resetLevel(); return; }
+  if (e.key === 'Escape') {
+    if (completed) return;
+    if (showNarrative) return;
+    paused = !paused;
+    if (paused) {
+      if (animFrame) cancelAnimationFrame(animFrame);
+      showOverlay('paused');
+    } else {
+      hideOverlay();
+    }
+    return;
+  }
+  if ((e.key === ' ' || e.key === 'Enter') && showNarrative) {
+    showNarrative = false;
+    hideOverlay();
+  }
+});
+
+window.addEventListener('keyup', e => state.keys.delete(e.key.toLowerCase()));
+
+const canvas = document.getElementById('c');
+canvas.addEventListener('click', e => {
+  if (showNarrative || paused || completed) return;
+  const rect = canvas.getBoundingClientRect();
+  const sx = CANVAS_W / rect.width, sy = CANVAS_H / rect.height;
+  const x = (e.clientX - rect.left) * sx;
+  const y = (e.clientY - rect.top) * sy;
+  const lvl = levels[levelIndex];
+  for (const wall of lvl.walls) {
+    if (!wall.portalable) continue;
+    const wr = wall.rect;
+    if (x >= wr.x && x <= wr.x + wr.w && y >= wr.y && y <= wr.y + wr.h) {
+      const { pos, normal } = getWallNormal(wall, { x, y });
+      state.portalA = { pos, normal, wallIndex: lvl.walls.indexOf(wall) };
+      break;
+    }
+  }
+});
+
+canvas.addEventListener('contextmenu', e => {
+  e.preventDefault();
+  if (showNarrative || paused || completed) return;
+  const rect = canvas.getBoundingClientRect();
+  const sx = CANVAS_W / rect.width, sy = CANVAS_H / rect.height;
+  const x = (e.clientX - rect.left) * sx;
+  const y = (e.clientY - rect.top) * sy;
+  const lvl = levels[levelIndex];
+  for (const wall of lvl.walls) {
+    if (!wall.portalable) continue;
+    const wr = wall.rect;
+    if (x >= wr.x && x <= wr.x + wr.w && y >= wr.y && y <= wr.y + wr.h) {
+      const { pos, normal } = getWallNormal(wall, { x, y });
+      state.portalB = { pos, normal, wallIndex: lvl.walls.indexOf(wall) };
+      break;
+    }
+  }
+});
+
+// ─── Game loop ────────────────────────────────────────────────────────────────
+function startLoop() {
+  if (animFrame) cancelAnimationFrame(animFrame);
+  state.lastTime = performance.now();
+  animFrame = requestAnimationFrame(loop);
+}
+
+function loop(now) {
+  const dt = Math.min((now - state.lastTime) / 1000, 0.033);
+  state.lastTime = now;
+  const lvl = levels[levelIndex];
+  const ctx = canvas.getContext('2d');
+
+  // Input
+  if (state.keys.has('a') || state.keys.has('arrowleft'))  state.player.vel.x -= MOVE_SPEED * dt * (state.player.grounded ? 3 : 1.5);
+  if (state.keys.has('d') || state.keys.has('arrowright')) state.player.vel.x += MOVE_SPEED * dt * (state.player.grounded ? 3 : 1.5);
+  if ((state.keys.has('w') || state.keys.has('arrowup') || state.keys.has(' ')) && state.player.grounded) {
+    state.player.vel.y = JUMP_VEL;
+    state.player.grounded = false;
+  }
+
+  // Gravity
+  const grav = getGravity(state.player.pos, lvl.defaultGravity, lvl.gravityZones);
+  state.player.vel = vecAdd(state.player.vel, vecScale(grav, dt));
+
+  // Friction & clamp
+  state.player.vel.x *= state.player.grounded ? FRICTION : 0.98;
+  state.player.vel.x = clamp(state.player.vel.x, -800, 800);
+  state.player.vel.y = clamp(state.player.vel.y, -800, 800);
+
+  // Move
+  state.player.pos = vecAdd(state.player.pos, vecScale(state.player.vel, dt));
+
+  // Collisions
+  const col = resolveCollisions(state.player, lvl.walls);
+  state.player.pos = col.resolved;
+  state.player.vel = col.vel;
+  state.player.grounded = col.grounded;
+
+  // Portal teleport
+  if (state.teleportCooldown > 0) {
+    state.teleportCooldown -= dt;
+  } else {
+    const tp = checkPortalTeleport(state.player, state.portalA, state.portalB);
+    if (tp.teleported) {
+      state.player.pos = tp.newPos;
+      state.player.vel = tp.newVel;
+      state.teleportCooldown = 0.3;
+    }
+  }
+
+  // Trail
+  state.player.trail.push({ ...state.player.pos });
+  if (state.player.trail.length > MAX_TRAIL) state.player.trail.shift();
+
+  // Check exit
+  if (rectsOverlap(playerRect(state.player), lvl.exit)) {
+    cancelAnimationFrame(animFrame);
+    nextLevel();
+    return;
+  }
+
+  // Out of bounds
+  if (state.player.pos.y > CANVAS_H + 50 || state.player.pos.y < -50 ||
+      state.player.pos.x < -50 || state.player.pos.x > CANVAS_W + 50) {
+    state.player = createPlayer(lvl);
+  }
+
+  // Render
+  render(ctx, CANVAS_W, CANVAS_H, lvl.walls, lvl.gravityZones, state.player, state.portalA, state.portalB, lvl.exit, now / 1000);
+
+  // Level name HUD
+  ctx.fillStyle = 'rgba(255,255,255,0.35)';
+  ctx.font = '10px "Share Tech Mono", monospace';
+  ctx.fillText(lvl.name, 12, 22);
+
+  animFrame = requestAnimationFrame(loop);
+}
+
+// ─── Boot ─────────────────────────────────────────────────────────────────────
+state.player = createPlayer(levels[0]);
+showOverlay('narrative');
+
+// Draw static frame while narrative is up
+(function staticFrame() {
+  const lvl = levels[levelIndex];
+  const ctx = canvas.getContext('2d');
+  render(ctx, CANVAS_W, CANVAS_H, lvl.walls, lvl.gravityZones, state.player, state.portalA, state.portalB, lvl.exit, 0);
+})();
+</script>
+</body>
+</html>
